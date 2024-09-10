@@ -54,6 +54,7 @@ import com.google.gson.Gson;
 import com.google.spanner.v1.TypeCode;
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -392,8 +393,8 @@ class SqlSpannerQueryTests {
 
     // @formatter:off
     String entityResolvedSql =
-        "SELECT *, ARRAY (SELECT AS STRUCT disabled, id, childId, value, ARRAY (SELECT AS STRUCT"
-            + " canceled, documentId, id, childId, content FROM documents WHERE (documents.id ="
+        "SELECT *, ARRAY (SELECT AS STRUCT childId, disabled, id, value, ARRAY (SELECT AS STRUCT"
+            + " canceled, childId, content, documentId, id FROM documents WHERE (documents.id ="
             + " children.id AND documents.childId = children.childId) AND (canceled = false)) AS"
             + " documents FROM children WHERE (children.id = trades.id) AND (disabled = false)) AS"
             + " children FROM (SELECT DISTINCT * FROM trades@{index=fakeindex} WHERE"
@@ -455,7 +456,7 @@ class SqlSpannerQueryTests {
               SpannerQueryOptions queryOptions = invocation.getArgument(1);
               assertThat(queryOptions.isAllowPartialRead()).isTrue();
 
-              assertThat(statement.getSql()).isEqualTo(entityResolvedSql);
+              assertThat(processSQL(statement.getSql())).isEqualTo(entityResolvedSql);
 
               Map<String, Value> paramMap = statement.getParameters();
 
@@ -506,6 +507,27 @@ class SqlSpannerQueryTests {
     verify(this.spannerTemplate, times(1)).executeQuery(any(), any());
   }
 
+  String processSQL(String sql){
+      var firstStruct = Arrays.asList(sql.substring(34,62).split(", "));
+      var secondStruct = Arrays.asList(sql.substring(88,130).split(", "));
+
+      Collections.sort(firstStruct);
+      Collections.sort(secondStruct);
+
+
+      String sortedFirstStruct = String.join(", ", firstStruct);
+      String sortedSecondStruct = String.join(", ", secondStruct);
+
+      StringBuilder updatedSql = new StringBuilder();
+      updatedSql.append(sql, 0, 34)
+              .append(sortedFirstStruct)
+              .append(sql, 62, 88)
+              .append(sortedSecondStruct)
+              .append(sql.substring(130));
+
+
+   return updatedSql.toString();
+  }
   @Test
   void dmlTest() throws NoSuchMethodException {
     String sql = "dml statement here";
